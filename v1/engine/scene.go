@@ -1,11 +1,16 @@
 package engine
 
+type Event interface {
+	GetType() string
+}
+
 type Scene struct {
 	name     string
 	setup    func(s *Scene) error
 	update   func(s *Scene) error
 	drawings map[string]drawable
 	fps      uint32
+	events   []Event
 	running  bool
 }
 
@@ -46,6 +51,15 @@ func (s *Scene) Run() error {
 	return nil
 }
 
+// Stop will set scene running state to false
+func (s *Scene) Stop() error {
+	if s.running {
+		s.running = false
+	}
+
+	return nil
+}
+
 // SetFPS will set current fps value for scene
 func (s *Scene) SetFPS(fps uint32) {
 	s.fps = fps
@@ -54,4 +68,18 @@ func (s *Scene) SetFPS(fps uint32) {
 // GetFPS return current fps value
 func (s *Scene) GetFPS() uint32 {
 	return s.fps
+}
+
+func (s *Scene) GetEvents() []Event {
+	ev := s.events
+	s.clearEvents()
+	return ev
+}
+
+func (s *Scene) clearEvents() {
+	s.events = []Event{}
+}
+
+func (s *Scene) addEvent(e Event) {
+	s.events = append(s.events, e)
 }

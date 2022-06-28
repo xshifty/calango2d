@@ -16,6 +16,7 @@ type sceneAware interface {
 	GetName() string
 	GetDrawableObjects() []drawable
 	Run() error
+	Stop() error
 	SetFPS(fps uint32)
 }
 
@@ -73,14 +74,18 @@ func New(t string, w, h int, frate uint32) *engine {
 			}
 		}
 
+		s.drawings["cursor"] = NewRect(0, 0, 40, 40, AlphaColor(0xffcc00ff))
+
 		return nil
 	}, func(s *Scene) error {
-		//fmt.Println("Rendering scene ", s.GetName(), " at ", s.GetFPS(), " FPS")
-
 		max_entropy := 2
 		min_entropy := 1
 
 		for k, r := range s.drawings {
+			if k == "cursor" {
+				continue
+			}
+
 			cx, cy := r.(*Rect).GetPosition()
 
 			fx := int32(rand.Intn(max_entropy-min_entropy) + min_entropy)
@@ -98,6 +103,17 @@ func New(t string, w, h int, frate uint32) *engine {
 			}
 
 			s.drawings[k].(*Rect).SetPosition(fx+(cx*sx), fy+(cy*sy))
+		}
+
+		for _, e := range s.GetEvents() {
+			if e.GetType() == MouseMoveEventType {
+				m := e.(*MouseMoveEvent)
+
+				mx := m.x - 20
+				my := m.y - 20
+
+				s.drawings["cursor"].(*Rect).SetPosition(mx, my)
+			}
 		}
 
 		return nil
@@ -132,6 +148,12 @@ func (e *engine) AddScene(s sceneAware) {
 
 // SetScene set current scene to be rendered
 func (e *engine) SetScene(n string) error {
+	if len(e.currentScene) > 0 {
+		if _, ok := e.scenes[e.currentScene]; ok {
+			e.scenes[e.currentScene].Stop()
+		}
+	}
+
 	if _, ok := e.scenes[n]; ok {
 		e.currentScene = n
 		return nil
@@ -216,6 +238,10 @@ func (e *engine) update() error {
 }
 
 func (e *engine) input() {
+	if _, ok := e.scenes[e.currentScene]; !ok {
+		return
+	}
+
 	for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 		switch t := event.(type) {
 		case *sdl.QuitEvent:
@@ -226,16 +252,23 @@ func (e *engine) input() {
 			case sdl.K_F11:
 				if t.State == sdl.RELEASED {
 					e.fullscreen = !e.fullscreen
-					if e.fullscreen {
-						e.window.SetSize(e.mode.W, e.mode.H)
-						e.window.SetFullscreen(sdl.WINDOW_FULLSCREEN_DESKTOP)
-					} else {
-						e.window.SetSize(int32(e.width), int32(e.height))
-						e.window.SetFullscreen(0)
+
+					nw := e.mode.W
+					nh := e.mode.H
+					m := uint32(sdl.WINDOW_FULLSCREEN_DESKTOP)
+					if !e.fullscreen {
+						nw = int32(e.width)
+						nh = int32(e.height)
+						m = 0
 					}
+
+					e.window.SetSize(nw, nh)
+					_ = e.window.SetFullscreen(m)
 				}
 				break
 			}
+		case *sdl.MouseMotionEvent:
+			e.scenes[e.currentScene].(*Scene).addEvent(newMouseMoveEvent(t.X, t.Y))
 		}
 	}
 }
